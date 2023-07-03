@@ -63,6 +63,7 @@ const emits = defineEmits<Emits>();
 
 // 当前是否是展开状态
 let isUnfold = true;
+let isRunning = false;
 
 //#region 元素的展开收起区域
 const triangleClass = ref('triangle');
@@ -75,11 +76,16 @@ onMounted(() => {
 });
 
 const handlTriangleClick = () => {
+    if(isRunning) return;
+    isRunning = true;
     if (isUnfold) {
         triangleClass.value = 'triangle rotate90';
     } else {
         triangleClass.value = 'triangle';
     }
+    setTimeout(() => {
+        isRunning = false;
+    }, 300)
     triggerFn!(nodes.value, true);
     isUnfold = !isUnfold;
 };
@@ -87,7 +93,7 @@ const handlTriangleClick = () => {
 
 const tree = props.tree;
 const selected = ref(false);
-// 当前选中的子元素的数量
+// 当前选中的子元素的数量，0.5 代表下级的子元素是半选状态，1 代表下级子元素被选中，当前值等于子元素的值就代表子元素全选中
 let selectChildren = ref(0);
 
 /**
@@ -102,7 +108,7 @@ const childChange = (select: 1 | 0.5 | -1 | -0.5) => {
         // 当选中的子元素数量是当前元素的子元素的数量的时候，要选中当前元素，并且直接向当前元素的父级传递值 1
         if (selectChildren.value === props.node.children!.length) {
             selected.value = true;
-            tree.add(props.node.key, props.hierarchy);
+            tree.add(props.node.key);
             emits('change', 1);
         } else {
             emits('change', 0.5);
@@ -110,14 +116,14 @@ const childChange = (select: 1 | 0.5 | -1 | -0.5) => {
         // 当当前选中子元素的值是当前元素的子元素的数量且初始值不是 0 的时候
     } else if (selectChildren.value === props.node.children!.length) {
         selected.value = true;
-        tree.add(props.node.key, props.hierarchy);
+        tree.add(props.node.key);
         emits('change', 0.5);
         // 排除上面两种情况，即初始不是 初始没有选中任何子元素 和 选中子元素后当前元素所有子元素都被选中 状态
         // 当前选中/去掉子元素之后不是当前元素的子元素的数量且初始值不是 0 的时候
     } else if (selectChildren.value === 0) {
         if (selected.value) {
             selected.value = false;
-            tree.sub(props.node.key, props.hierarchy);
+            tree.sub(props.node.key);
             emits('change', -1);
         } else {
             emits('change', -0.5);
@@ -126,12 +132,13 @@ const childChange = (select: 1 | 0.5 | -1 | -0.5) => {
         // 如果选中/去掉之前，元素状态是选中的状态，就要勾掉当前元素的选中态，并且告诉当前元素的父元素其选中态被勾掉
         if (selected.value) {
             selected.value = false;
-            tree.sub(props.node.key, props.hierarchy);
+            tree.sub(props.node.key);
             emits('change', -0.5);
         }
     }
 };
 
+// 所有的子元素的 ref，是一个数组
 const nodesRef = ref<{ fatherChange: (type: 'select' | 'remove') => void }[] | null>(null);
 
 /**
@@ -142,7 +149,7 @@ const fatherChange = (type: 'select' | 'remove') => {
     // 当父元素被选择的时候，如果当前元素是已经非选中状态，那么就需要将当前元素选中
     if (type === 'select' && !selected.value) {
         selected.value = true;
-        tree.add(props.node.key, props.hierarchy);
+        tree.add(props.node.key);
         if (nodesRef.value) {
             selectChildren.value = props.node.children!.length;
             nodesRef.value.forEach((ele) => {
@@ -152,7 +159,7 @@ const fatherChange = (type: 'select' | 'remove') => {
         // 当父元素被移除选择
     } else if (type === 'remove') {
         selected.value = false;
-        tree.sub(props.node.key, props.hierarchy);
+        tree.sub(props.node.key);
 
         // 如果当前元素还有子元素，就要向子元素传递移除的操作
         if (nodesRef.value) {
@@ -171,7 +178,7 @@ const select = () => {
     selected.value = !selected.value;
     // 如果当前元素被选中
     if (selected.value) {
-        tree.add(props.node.key, props.hierarchy);
+        tree.add(props.node.key);
         // 当前元素选中操作之前，如果已经子元素被选中，那么在子元素被选中的时候已经向当前元素的父元素传递了 0.5，所以在当前元素被选中的时候，只需要在向父元素传递 0.5 既可
         // 即当前元素能够向父元素传递的值最大是 1，如果一个元素被选中那么就要向父元素传递 1，但是如果一个元素只有其下的某几个子元素被选中，但是不是全部子元素，那么当前元素应该只向父元素传递 0.5 既可，即告诉父元素应该展示半选状态
         if (selectChildren.value > 0) {
@@ -188,7 +195,7 @@ const select = () => {
         }
         // 元素被移除时，给父级传递 -1 告诉父级移除状态
     } else {
-        tree.sub(props.node.key, props.hierarchy);
+        tree.sub(props.node.key);
         emits('change', -1);
 
         if (nodesRef.value) {
